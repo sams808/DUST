@@ -91,6 +91,10 @@ def draw_fig_a(fig, df: pd.DataFrame, config: FigAConfig):
     # are actually removed instead of accumulating on every redraw.
     fig.clear()
     ax = fig.add_subplot(111)
+    # Set limits now (not at the end) - adjustText below needs a real
+    # renderer/axes extent to measure label collisions against.
+    ax.set_xlim(config.r_min, config.r_max)
+    ax.set_ylim(config.k_min, config.k_max)
     k_values = np.linspace(config.k_min, config.k_max, config.resolution)
     r_values = np.linspace(config.r_min, config.r_max, config.resolution)
     n4 = n4_grid(k_values, r_values)
@@ -117,16 +121,26 @@ def draw_fig_a(fig, df: pd.DataFrame, config: FigAConfig):
             cb2 = fig.colorbar(sc, ax=ax, pad=0.12)
             cb2.set_label(config.point_color_by, fontsize=config.font_size)
         if config.label_column and config.label_column in df.columns:
+            texts, label_x, label_y = [], [], []
             for xi, yi, lbl in zip(x, y, df[config.label_column]):
-                if pd.notna(xi) and pd.notna(yi) and pd.notna(lbl):
-                    ax.annotate(str(lbl), (xi, yi), textcoords="offset points",
-                                xytext=(6, 4), fontsize=config.font_size * 0.8)
+                if pd.notna(xi) and pd.notna(yi) and pd.notna(lbl) and str(lbl).strip():
+                    texts.append(ax.text(xi, yi, str(lbl), fontsize=config.font_size * 0.8))
+                    label_x.append(xi)
+                    label_y.append(yi)
+            if texts:
+                # Nearby points (common with real datasets - e.g. replicate
+                # glasses a few tenths of R'/K' apart) used to get labels
+                # stacked with a fixed offset and no collision avoidance,
+                # rendering as illegible overlapping text. adjustText
+                # repels overlapping labels apart and draws a thin leader
+                # line back to the point it belongs to when it has to move.
+                from adjustText import adjust_text
+                adjust_text(texts, x=label_x, y=label_y, ax=ax,
+                            arrowprops=dict(arrowstyle="-", color="gray", lw=0.6, alpha=0.7))
 
     ax.set_xlabel(config.xlabel, fontsize=config.font_size)
     ax.set_ylabel(config.ylabel, fontsize=config.font_size)
     ax.set_title(config.title, fontsize=config.font_size * 1.1)
-    ax.set_xlim(config.r_min, config.r_max)
-    ax.set_ylim(config.k_min, config.k_max)
     ax.tick_params(labelsize=config.font_size * 0.9)
     if config.show_grid:
         ax.grid(alpha=0.3)
@@ -150,27 +164,33 @@ def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig):
     norm = BoundaryNorm([0.5, 1.5, 2.5, 3.5], cmap.N)
     ax.contourf(r_values, n4_values, codes, levels=[0.5, 1.5, 2.5, 3.5],
                 cmap=cmap, norm=norm, alpha=config.region_alpha)
-    # hatch the Q3-only band to match the thesis figure's texture
-    ax.contourf(r_values, n4_values, codes, levels=[1.5, 2.5], colors="none",
-                hatches=["//"], alpha=0)
 
     if config.show_iso_k:
-        # The source figure only draws each iso-K' guide over the range
-        # where it is actually informative about the NBO-Si+B regime: the
-        # declining segment from (RD1, Rmax) to (RD3, 0) - confined to the
-        # blue region. It does NOT extend the rising/flat portions into
-        # the green/white regions (those would be redundant anyway: every
-        # K's rising segment sits exactly on the same N4=R' diagonal).
+        # Each iso-K' guide has two visible parts, confirmed pixel-for-pixel
+        # against the source figure at 600 dpi:
+        #   - a FLAT plateau at N4=Rmax(K') from R'=Rmax(K') to R'=RD1(K'),
+        #     inside the green "NBO-Si only" region - this is what reads as
+        #     the region's hatch texture there (its 7 evenly-spaced
+        #     horizontal strokes are exactly Rmax(2..8)=0.625..1.0 in steps
+        #     of 0.0625 = 1/16, not a decorative hatch pattern), so no
+        #     separate synthetic hatch is drawn here anymore;
+        #   - a DECLINING segment from (RD1, Rmax) to (RD3, 0), inside the
+        #     blue "NBO-Si+B" region, which is where the source figure
+        #     places the "K'=n" label.
+        # The rising diagonal (R'<Rmax) is not drawn separately since every
+        # K' shares the same N4=R' line there - it's already the white/green
+        # boundary.
         for k in config.iso_k_values:
             rmax = 0.5 + k / 16.0
             rd1 = 0.5 + k / 4.0
             rd3 = k + 2.0
-            if rd1 > config.r_max or rd1 >= rd3:
-                continue  # this K' line's blue-region segment isn't visible at all
+            if rmax > config.r_max:
+                continue  # doesn't enter the visible R' range at all
 
             r_end = min(rd3, config.r_max)
-            r_line = np.linspace(rd1, r_end, 100)
-            n4_line = rmax - (r_line - rd1) * (8 + k) / (12 * (2 + k))
+            r_line = np.linspace(rmax, r_end, 150)
+            n4_line = np.where(r_line < rd1, rmax,
+                                rmax - (r_line - rd1) * (8 + k) / (12 * (2 + k)))
             # Bound by both axis edges - rmax can exceed n4_max for large
             # K' (e.g. K'>8 pushes Rmax=0.5+K'/16 above 1.0), in which case
             # the line starts above the visible window entirely.
@@ -180,6 +200,13 @@ def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig):
             r_line, n4_line = r_line[visible], n4_line[visible]
             ax.plot(r_line, n4_line, color=config.iso_k_color, linewidth=config.iso_k_linewidth)
 
+            # Label only on the declining (blue-region) part, matching the
+            # source figure - never on the flat plateau in the green region.
+            decl = r_line >= rd1
+            if decl.sum() < 2:
+                continue
+            r_decl, n4_decl = r_line[decl], n4_line[decl]
+
             # Place the label ON the line, a bit before its visible end,
             # rotated to follow the line's on-screen angle (not the data
             # slope - the R'/N4 axes have very different scales, so those
@@ -188,14 +215,14 @@ def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig):
             # Skip the label (keep the line) if the visible stretch is too
             # short to anchor readable rotated text to, e.g. a line barely
             # clipping the corner of a zoomed-in axis range.
-            span_r = r_line[-1] - r_line[0]
+            span_r = r_decl[-1] - r_decl[0]
             if span_r < 0.05 * (config.r_max - config.r_min):
                 continue
             t = 0.85
-            label_r = r_line[0] + t * span_r
-            label_n4 = n4_line[0] + t * (n4_line[-1] - n4_line[0])
-            p0 = ax.transData.transform((r_line[0], n4_line[0]))
-            p1 = ax.transData.transform((r_line[-1], n4_line[-1]))
+            label_r = r_decl[0] + t * span_r
+            label_n4 = n4_decl[0] + t * (n4_decl[-1] - n4_decl[0])
+            p0 = ax.transData.transform((r_decl[0], n4_decl[0]))
+            p1 = ax.transData.transform((r_decl[-1], n4_decl[-1]))
             angle = np.degrees(np.arctan2(p1[1] - p0[1], p1[0] - p0[0]))
             ax.text(label_r, label_n4, f"K'={k:g}", fontsize=config.font_size * 0.75,
                     color=config.iso_k_color, alpha=0.95, rotation=angle,
