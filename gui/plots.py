@@ -152,18 +152,29 @@ def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig):
 
     if config.show_iso_k:
         for k in config.iso_k_values:
-            r_line = np.linspace(0.5 + k / 4.0, k + 2.0, 100)
             rmax = 0.5 + k / 16.0
             rd1 = 0.5 + k / 4.0
+            rd3 = k + 2.0
+            if rd1 > config.r_max or rd1 >= rd3:
+                continue  # this K' line doesn't enter the visible R' range at all
+
+            r_line = np.linspace(rd1, rd3, 200)
             n4_line = rmax - (r_line - rd1) * (8 + k) / (12 * (2 + k))
-            r_line2 = np.linspace(0, rmax, 20)
             ax.plot(r_line, n4_line, color=config.iso_k_color, linewidth=config.iso_k_linewidth)
-            valid = n4_line >= config.n4_min
-            if valid.any():
-                idx = np.where(valid)[0][-1]
-                ax.annotate(f"K'={k:g}", (r_line[idx], n4_line[idx]), fontsize=config.font_size * 0.75,
-                            color=config.iso_k_color, alpha=0.85,
-                            xytext=(3, 0), textcoords="offset points")
+
+            # Label where the line exits the visible axes - along the right
+            # edge (R'=r_max) if it's still above n4_min there, matching the
+            # thesis figure's stacked right-edge labels; otherwise wherever
+            # it crosses n4_min first (bottom edge), whichever comes first.
+            exit_r = min(rd3, config.r_max)
+            n4_at_exit = rmax - (exit_r - rd1) * (8 + k) / (12 * (2 + k))
+            if n4_at_exit < config.n4_min:
+                # solve N4(r) = n4_min for r, using the *unclamped* branch
+                exit_r = rd1 + (rmax - config.n4_min) * 12 * (2 + k) / (8 + k)
+                n4_at_exit = config.n4_min
+            ax.annotate(f"K'={k:g}", (exit_r, n4_at_exit), fontsize=config.font_size * 0.75,
+                        color=config.iso_k_color, alpha=0.9,
+                        xytext=(-4, 4), textcoords="offset points", ha="right", va="bottom")
 
     if df is not None and len(df):
         x = df.get("Dell_R")
@@ -179,7 +190,10 @@ def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig):
         handles = [Patch(facecolor=config.region_colors.get(i, "white"),
                           alpha=config.region_alpha, label=config.region_labels.get(i, ""))
                    for i in (1, 2, 3)]
-        leg1 = ax.legend(handles=handles, loc="lower right", fontsize=config.font_size * 0.75,
+        # "lower right" collides with the iso-K' labels stacked along the
+        # bottom/right edges (that's where low-K' lines exit the axes) -
+        # "upper right" sits in the otherwise-empty top corner instead.
+        leg1 = ax.legend(handles=handles, loc="upper right", fontsize=config.font_size * 0.75,
                           framealpha=0.9)
         ax.add_artist(leg1)
 

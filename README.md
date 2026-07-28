@@ -7,12 +7,11 @@ is built around - and, fittingly, an app about scattering "dust" of
 modifier cations that break a glass network apart into non-bridging
 oxygens.)*
 
-A desktop app (PySide6 + matplotlib) that reproduces PhD thesis Figures
-4.17 and 5.7 (Soudani, *Manuscrit_THESE_SOUDANI.pdf*) - N4 (fraction of
-4-coordinated boron) as a function of glass composition - with a fully
-editable R'/K' formula, an editable composition table, CSV import, two
-independent N4 models, NBO regime classification, %NBO speciation, and
-full plot customization.
+A desktop app (PySide6 + matplotlib) for plotting N4 (fraction of
+4-coordinated boron) as a function of aluminoborosilicate glass
+composition, with a fully editable R'/K' formula, an editable
+composition table, CSV import, two independent N4 models, NBO regime
+classification, %NBO speciation, and full plot customization.
 
 ![Fig 4.17-style and Fig 5.7-style plots, generated from the app's own bundled example data](docs/img/preview.png)
 
