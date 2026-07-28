@@ -137,6 +137,10 @@ def draw_fig_a(fig, df: pd.DataFrame, config: FigAConfig):
 def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig):
     fig.clear()
     ax = fig.add_subplot(111)
+    # Set limits now (not at the end) so ax.transData is correct below when
+    # computing on-screen line angles for the iso-K' labels.
+    ax.set_xlim(config.r_min, config.r_max)
+    ax.set_ylim(config.n4_min, config.n4_max)
     r_values = np.linspace(max(config.r_min, 1e-6), config.r_max, config.resolution)
     n4_values = np.linspace(config.n4_min, config.n4_max, config.resolution)
     codes = regime_grid(r_values, n4_values)
@@ -151,55 +155,53 @@ def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig):
                 hatches=["//"], alpha=0)
 
     if config.show_iso_k:
-        # Each iso-K' guide is the FULL N4(R') curve at fixed K' - rising
-        # diagonal (N4=R', regime "No NBO"), flat plateau at Rmax (regime
-        # "NBO-Si only"), then declining to 0 at RD3 (regime "NBO-Si+B") -
-        # not just the declining tail. This is what the source figure
-        # plots (and what EXAMPLES/DYB/DYB.ipynb draws as N4_values[idx, :]
-        # for each fixed K row): the rising/flat parts of low-K' lines are
-        # what make the whole fan of lines start near the origin instead
-        # of appearing to begin partway across the plot.
-        r_grid = np.linspace(max(config.r_min, 0.0), config.r_max, 400)
+        # The source figure only draws each iso-K' guide over the range
+        # where it is actually informative about the NBO-Si+B regime: the
+        # declining segment from (RD1, Rmax) to (RD3, 0) - confined to the
+        # blue region. It does NOT extend the rising/flat portions into
+        # the green/white regions (those would be redundant anyway: every
+        # K's rising segment sits exactly on the same N4=R' diagonal).
         for k in config.iso_k_values:
             rmax = 0.5 + k / 16.0
             rd1 = 0.5 + k / 4.0
             rd3 = k + 2.0
-            n4_curve = np.where(
-                r_grid < rmax, r_grid,
-                np.where(r_grid < rd1, rmax,
-                         np.where(r_grid < rd3,
-                                  rmax - (r_grid - rd1) * (8 + k) / (12 * (2 + k)),
-                                  np.nan)),
-            )
-            ax.plot(r_grid, n4_curve, color=config.iso_k_color, linewidth=config.iso_k_linewidth)
+            if rd1 > config.r_max or rd1 >= rd3:
+                continue  # this K' line's blue-region segment isn't visible at all
 
-            # Label where the curve exits the visible axes - along the
-            # right edge (R'=r_max) if it's still above n4_min there
-            # (matches the source figure's stacked right-edge labels for
-            # higher K'); at its own endpoint (RD3, 0) if it fully
-            # depolymerizes before reaching r_max (lower K'); otherwise
-            # wherever it crosses n4_min first, if that's tighter than both.
-            if config.r_max < rd3:
-                exit_r = config.r_max
-                n4_at_exit = (
-                    config.r_max if config.r_max < rmax
-                    else rmax if config.r_max < rd1
-                    else rmax - (config.r_max - rd1) * (8 + k) / (12 * (2 + k))
-                )
-            else:
-                exit_r, n4_at_exit = rd3, 0.0  # curve ends here, not projected out to r_max
-            if n4_at_exit >= config.n4_min:
-                label_r, label_n4 = exit_r, n4_at_exit
-            elif config.r_max > rd1:
-                label_r = min(rd1 + (rmax - config.n4_min) * 12 * (2 + k) / (8 + k), rd3)
-                label_n4 = config.n4_min
-            else:
-                continue  # this K' line never enters the visible (R', N4) window
-            if label_n4 > config.n4_max:
+            r_end = min(rd3, config.r_max)
+            r_line = np.linspace(rd1, r_end, 100)
+            n4_line = rmax - (r_line - rd1) * (8 + k) / (12 * (2 + k))
+            # Bound by both axis edges - rmax can exceed n4_max for large
+            # K' (e.g. K'>8 pushes Rmax=0.5+K'/16 above 1.0), in which case
+            # the line starts above the visible window entirely.
+            visible = (n4_line >= config.n4_min) & (n4_line <= config.n4_max)
+            if not visible.any():
                 continue
-            ax.annotate(f"K'={k:g}", (label_r, label_n4), fontsize=config.font_size * 0.75,
-                        color=config.iso_k_color, alpha=0.9,
-                        xytext=(-4, 4), textcoords="offset points", ha="right", va="bottom")
+            r_line, n4_line = r_line[visible], n4_line[visible]
+            ax.plot(r_line, n4_line, color=config.iso_k_color, linewidth=config.iso_k_linewidth)
+
+            # Place the label ON the line, a bit before its visible end,
+            # rotated to follow the line's on-screen angle (not the data
+            # slope - the R'/N4 axes have very different scales, so those
+            # differ) so it reads like a tilted inline label, matching the
+            # source figure, instead of floating disconnected in a corner.
+            # Skip the label (keep the line) if the visible stretch is too
+            # short to anchor readable rotated text to, e.g. a line barely
+            # clipping the corner of a zoomed-in axis range.
+            span_r = r_line[-1] - r_line[0]
+            if span_r < 0.05 * (config.r_max - config.r_min):
+                continue
+            t = 0.85
+            label_r = r_line[0] + t * span_r
+            label_n4 = n4_line[0] + t * (n4_line[-1] - n4_line[0])
+            p0 = ax.transData.transform((r_line[0], n4_line[0]))
+            p1 = ax.transData.transform((r_line[-1], n4_line[-1]))
+            angle = np.degrees(np.arctan2(p1[1] - p0[1], p1[0] - p0[0]))
+            ax.text(label_r, label_n4, f"K'={k:g}", fontsize=config.font_size * 0.75,
+                    color=config.iso_k_color, alpha=0.95, rotation=angle,
+                    ha="center", va="center", rotation_mode="anchor",
+                    bbox=dict(boxstyle="round,pad=0.05", facecolor="white",
+                              edgecolor="none", alpha=0.6))
 
     if df is not None and len(df):
         x = df.get("Dell_R")
@@ -228,8 +230,6 @@ def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig):
     ax.set_xlabel(config.xlabel, fontsize=config.font_size)
     ax.set_ylabel(config.ylabel, fontsize=config.font_size)
     ax.set_title(config.title, fontsize=config.font_size * 1.1)
-    ax.set_xlim(config.r_min, config.r_max)
-    ax.set_ylim(config.n4_min, config.n4_max)
     ax.tick_params(labelsize=config.font_size * 0.9)
     if config.show_grid:
         ax.grid(alpha=0.3)
