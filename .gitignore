@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+build/
+dist/
+*.spec
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.vscode/
+.idea/
+
+# Copyrighted journal articles kept for local reference only - this repo
+# is public, and redistributing paywalled PDFs would be a copyright
+# problem. Nothing in the app reads from this folder at runtime; see
+# docs/MODELS_REFERENCE.md for citations instead.
+bib/
