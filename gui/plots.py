@@ -151,28 +151,53 @@ def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig):
                 hatches=["//"], alpha=0)
 
     if config.show_iso_k:
+        # Each iso-K' guide is the FULL N4(R') curve at fixed K' - rising
+        # diagonal (N4=R', regime "No NBO"), flat plateau at Rmax (regime
+        # "NBO-Si only"), then declining to 0 at RD3 (regime "NBO-Si+B") -
+        # not just the declining tail. This is what the source figure
+        # plots (and what EXAMPLES/DYB/DYB.ipynb draws as N4_values[idx, :]
+        # for each fixed K row): the rising/flat parts of low-K' lines are
+        # what make the whole fan of lines start near the origin instead
+        # of appearing to begin partway across the plot.
+        r_grid = np.linspace(max(config.r_min, 0.0), config.r_max, 400)
         for k in config.iso_k_values:
             rmax = 0.5 + k / 16.0
             rd1 = 0.5 + k / 4.0
             rd3 = k + 2.0
-            if rd1 > config.r_max or rd1 >= rd3:
-                continue  # this K' line doesn't enter the visible R' range at all
+            n4_curve = np.where(
+                r_grid < rmax, r_grid,
+                np.where(r_grid < rd1, rmax,
+                         np.where(r_grid < rd3,
+                                  rmax - (r_grid - rd1) * (8 + k) / (12 * (2 + k)),
+                                  np.nan)),
+            )
+            ax.plot(r_grid, n4_curve, color=config.iso_k_color, linewidth=config.iso_k_linewidth)
 
-            r_line = np.linspace(rd1, rd3, 200)
-            n4_line = rmax - (r_line - rd1) * (8 + k) / (12 * (2 + k))
-            ax.plot(r_line, n4_line, color=config.iso_k_color, linewidth=config.iso_k_linewidth)
-
-            # Label where the line exits the visible axes - along the right
-            # edge (R'=r_max) if it's still above n4_min there, matching the
-            # thesis figure's stacked right-edge labels; otherwise wherever
-            # it crosses n4_min first (bottom edge), whichever comes first.
-            exit_r = min(rd3, config.r_max)
-            n4_at_exit = rmax - (exit_r - rd1) * (8 + k) / (12 * (2 + k))
-            if n4_at_exit < config.n4_min:
-                # solve N4(r) = n4_min for r, using the *unclamped* branch
-                exit_r = rd1 + (rmax - config.n4_min) * 12 * (2 + k) / (8 + k)
-                n4_at_exit = config.n4_min
-            ax.annotate(f"K'={k:g}", (exit_r, n4_at_exit), fontsize=config.font_size * 0.75,
+            # Label where the curve exits the visible axes - along the
+            # right edge (R'=r_max) if it's still above n4_min there
+            # (matches the source figure's stacked right-edge labels for
+            # higher K'); at its own endpoint (RD3, 0) if it fully
+            # depolymerizes before reaching r_max (lower K'); otherwise
+            # wherever it crosses n4_min first, if that's tighter than both.
+            if config.r_max < rd3:
+                exit_r = config.r_max
+                n4_at_exit = (
+                    config.r_max if config.r_max < rmax
+                    else rmax if config.r_max < rd1
+                    else rmax - (config.r_max - rd1) * (8 + k) / (12 * (2 + k))
+                )
+            else:
+                exit_r, n4_at_exit = rd3, 0.0  # curve ends here, not projected out to r_max
+            if n4_at_exit >= config.n4_min:
+                label_r, label_n4 = exit_r, n4_at_exit
+            elif config.r_max > rd1:
+                label_r = min(rd1 + (rmax - config.n4_min) * 12 * (2 + k) / (8 + k), rd3)
+                label_n4 = config.n4_min
+            else:
+                continue  # this K' line never enters the visible (R', N4) window
+            if label_n4 > config.n4_max:
+                continue
+            ax.annotate(f"K'={k:g}", (label_r, label_n4), fontsize=config.font_size * 0.75,
                         color=config.iso_k_color, alpha=0.9,
                         xytext=(-4, 4), textcoords="offset points", ha="right", va="bottom")
 
