@@ -115,26 +115,54 @@ class MainWindow(QMainWindow):
         layout.addWidget(toolbar)
         layout.addWidget(canvas)
         btn_row = QHBoxLayout()
+
+        w_in, h_in = fig.get_size_inches()
+        width_cm = QDoubleSpinBox()
+        width_cm.setRange(1.0, 200.0)
+        width_cm.setDecimals(1)
+        width_cm.setSuffix(" cm")
+        width_cm.setValue(round(w_in * 2.54, 1))
+        height_cm = QDoubleSpinBox()
+        height_cm.setRange(1.0, 200.0)
+        height_cm.setDecimals(1)
+        height_cm.setSuffix(" cm")
+        height_cm.setValue(round(h_in * 2.54, 1))
         dpi_spin = QSpinBox()
         dpi_spin.setRange(72, 1200)
         dpi_spin.setValue(300)
-        btn_row.addWidget(QLabel("Export DPI:"))
+
+        btn_row.addWidget(QLabel("Export size:"))
+        btn_row.addWidget(width_cm)
+        btn_row.addWidget(QLabel("x"))
+        btn_row.addWidget(height_cm)
+        btn_row.addWidget(QLabel("DPI:"))
         btn_row.addWidget(dpi_spin)
         btn_export = QPushButton("Export figure...")
-        btn_export.clicked.connect(lambda: self._export_figure(fig, dpi_spin.value()))
+        btn_export.clicked.connect(
+            lambda: self._export_figure(fig, dpi_spin.value(), width_cm.value(), height_cm.value())
+        )
         btn_row.addWidget(btn_export)
         btn_row.addStretch(1)
         layout.addLayout(btn_row)
         return w
 
-    def _export_figure(self, fig, dpi):
+    def _export_figure(self, fig, dpi, width_cm, height_cm):
         path, _ = QFileDialog.getSaveFileName(
             self, "Export figure", "figure.png",
             "PNG (*.png);;PDF (*.pdf);;SVG (*.svg)",
         )
         if not path:
             return
-        fig.savefig(path, dpi=dpi, bbox_inches="tight")
+        original_size = fig.get_size_inches()
+        try:
+            # Exact requested physical size, not a "tight" crop - a tight
+            # bbox recomputes the crop from content extent, which would
+            # make the saved file a different size than what was typed in.
+            fig.set_size_inches(width_cm / 2.54, height_cm / 2.54)
+            fig.savefig(path, dpi=dpi)
+        finally:
+            fig.set_size_inches(original_size)
+            fig.canvas.draw_idle()
         QMessageBox.information(self, "Export complete", f"Saved to {path}")
 
     # ------------------------------------------------------------------
