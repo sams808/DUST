@@ -34,11 +34,13 @@ class ColumnMappingDialog(QDialog):
         self._combos = {}
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(
+        intro = QLabel(
             "Confirm what each CSV column represents. Unrecognized columns "
             "default to \"Ignore\"; pick \"Sample\" or \"Label\" to keep them "
             "as text, or pick an oxide to import it as composition data."
-        ))
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
         form = QFormLayout()
         options = ["Ignore", "Sample", "Label"] + CANONICAL_OXIDES
         for col in self.columns:

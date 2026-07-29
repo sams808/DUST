@@ -1,8 +1,7 @@
 """
 Dell (1983) / Du & Stebbins (2005a) N4 and NBO-speciation model, as
-generalized to aluminoborosilicate glasses and used to draw thesis
-Figures 4.17 and 5.7 (see EXAMPLES/DYB/DYB.ipynb and
-"Copie de Dell1983 v2.xlsx" / "Copie de RnKp Dell1983 10-10-2023.xlsx",
+generalized to aluminoborosilicate glasses (see EXAMPLES/DYB/DYB.ipynb
+and "Copie de Dell1983 v2.xlsx" / "Copie de RnKp Dell1983 10-10-2023.xlsx",
 sheet "Model Dell").
 
 Definitions (R', K' in mol% ratios; formers/modifiers are user-editable
@@ -15,8 +14,8 @@ oxide -> coefficient dicts, see core/oxides.py for defaults):
     RD1   = 0.5 + K'/4
     RD3   = K' + 2
 
-Three NBO regimes (boundaries exactly as stated in the thesis text,
-section 5.1.4, and reproduced in Fig. 4.17B / 5.7):
+Three NBO regimes (published boundary definitions - see
+docs/MODELS_REFERENCE.md):
     R' < Rmax            -> "No NBO"
     Rmax <= R' < RD1      -> "NBO-Si only (Q3)"
     RD1 <= R' < RD3        -> "NBO-Si (Q2 & Q3) + NBO-B"
@@ -163,7 +162,7 @@ def n4_grid(k_values: np.ndarray, r_values: np.ndarray) -> np.ndarray:
 
 
 def regime_grid(r_values: np.ndarray, n4_values: np.ndarray) -> np.ndarray:
-    """Classify each (R', N4) grid cell for the Fig. 4.17B / 5.7 style
+    """Classify each (R', N4) grid cell for the N4-vs-R' NBO-regime
     background, independent of any single K' value (K' only appears as
     the iso-K' guide lines overlaid on top).
 

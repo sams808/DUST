@@ -24,13 +24,26 @@ weight:
     R'   = sum(coefficient_i * x_i) / D   over checked "modifier" oxides
 
 Default: formers = {Al2O3: 1, B2O3: 1}; modifiers = alkalis + alkaline
-earths + Bi2O3, all at weight 1. The thesis itself uses two different
-modifier sets - Fig 4.17: Na2O+CaO+Bi2O3; Fig 5.7: Na2O only - both are
-one-click presets in the app, alongside a Lu-et-al.-2021-style
-weighted scheme (Al2O3 weighted x4 relative to B2O3, alkaline earths
-at half weight, trivalent modifiers at 1/3) if you want to see how
-that weighting scheme behaves inside the Dell regime framework, and a
-save/load mechanism for your own refined formula.
+earths, all at weight 1 (Bi2O3 is deliberately not in this default -
+its role as an NBO-forming modifier in the Dell/Du-Stebbins sense
+isn't settled, see "Bi2O3" below). Any oxide in `core/oxides.py`'s
+CANONICAL_OXIDES list - not just alkalis/alkaline earths, but
+transition metals, rare earths and actinide oxides too, for complex
+multicomponent glasses - can be assigned as a former, a modifier, or
+ignored, each with its own coefficient. A few one-click presets are
+included (Na2O+CaO+Bi2O3, Na2O only, a Lu-et-al.-2021-style weighted
+scheme applied to this model), plus a save/load mechanism for your own
+refined formula.
+
+#### Bi2O3
+
+Bismuth is not believed to act as a conventional alkali/alkaline-earth
+charge compensator - it can also exist as Bi5+ rather than only Bi3+,
+and its impact on network depolymerization is not settled the way the
+alkali-derived Dell/Du-Stebbins model's own charge compensators are.
+It is available as a modifier (full weight or your own custom weight)
+but excluded from the default preset for that reason - include it
+deliberately, not by default.
 
 ### Regime boundaries
 
@@ -52,8 +65,8 @@ so extrapolating past it would go unphysically negative.
 
 ### NBO regime classification
 
-Three regimes, matching the thesis's own wording (section 5.1.4,
-p.165) and Figs 4.17B/5.7's white/green/blue background exactly:
+Three regimes (colors customizable in the Appearance tab; defaults
+white/green/blue below):
 
 | Regime | Condition | Meaning |
 |---|---|---|
@@ -80,7 +93,7 @@ carries it:
 These are undefined (NaN) once R' >= RD3 and 0/0 (reported as 0%) when
 NBO_tot = 0 (the "No NBO" regime).
 
-### Fig 5.7-style background - derived, not fitted
+### N4-vs-R' region background - derived, not fitted
 
 The N4-vs-R' background (white/green/blue regions) is drawn purely
 from R' and N4, independent of any single K' (K' only appears as the
@@ -99,6 +112,30 @@ identities**, not an empirical fit:
 docstring.) These two curves match the ones used in
 `EXAMPLES/DYB/DYB.ipynb` - confirmed independently here by algebra
 rather than assumed from that notebook.
+
+### Iso-K' guide lines
+
+Each guide line is the real N4(R') shape at that fixed K' - not just
+the declining tail: a flat plateau at N4=Rmax(K') from R'=Rmax(K') to
+R'=RD1(K') (inside the "NBO-Si only" region), continuing into the
+declining segment from (RD1, Rmax) down to (RD3, 0) (inside the
+"NBO-Si+NBO-B" region, where the "K'=n" label is placed). The rising
+diagonal below R'=Rmax(K') is not drawn separately since it's
+identical for every K' - it's already the region boundary itself.
+
+### Displaying Lu et al. (2021) N4 against R' or R''?
+
+All series in the N4-vs-R' plot share the same x-position: Dell's R',
+not each series' own R'-equivalent. For the Dell/Du-Stebbins series
+that's exactly right by construction. For a Lu et al. (2021) series,
+it means the point is plotted at Dell's R' even though its N4 value
+was actually computed from Lu's own R'' (a different weighted formula
+- see below) - a deliberate choice, not an oversight, because the
+background regions and iso-K' lines are inherently defined in terms of
+Dell's R'/K', so that's the only x-axis they're meaningful against.
+The app flags this on the axis label itself: it reads "R' or R''"
+whenever a Lu series is shown, instead of implying the Lu points sit
+at their own R''.
 
 ## 2. Lu et al. (2021)
 
@@ -119,7 +156,7 @@ matches exactly what the spreadsheet publishes as the fitted model):
 | ZrO2 | 3 | CaO, MgO, SrO, BaO, ZnO, PbO | 0.5 |
 | P2O5, Fe2O3, TiO2, HfO2 | 0 (present in the sheet, not yet calibrated) | La2O3, Y2O3, Bi2O3 | 1/3 |
 
-Four fit variants, chosen in the Appearance tab's Fig 5.7-style series
+Four fit variants, chosen in the Appearance tab's N4-vs-R' data series
 list:
 
 **Modified Du & Stebbins** ("ds_whole" / "ds_borosilicate"):
@@ -154,13 +191,13 @@ speciation breakdown, so DUST's %NBO-species columns are Dell-model-only.
 
 ## Calculation check
 
-Both source spreadsheets were checked against the thesis text and the
-underlying papers, not just transcribed blindly:
+Both source spreadsheets were checked against the published papers
+they implement, not just transcribed blindly:
 
 - `Copie de Dell1983 v2.xlsx` and `Copie de RnKp Dell1983 10-10-2023.xlsx`
   have a **byte-identical** "Model Dell" sheet.
-- Every regime boundary and NBO formula matches the thesis's own text
-  (p.165, section 5.1.4) and the Du & Stebbins (2005a) paper.
+- Every regime boundary and NBO formula matches the published
+  regime-boundary definitions and the Du & Stebbins (2005a) paper.
 - The spreadsheet's 4-branch `IF` classification ladder (R'<=0.5 /
   0.5<R'<Rmax / Rmax<=R'<RD1 / RD1<=R'<RD3) has no gaps or overlaps;
   R'<=0.5 always falls under R'<Rmax too (since Rmax>=0.5 for K'>=0),

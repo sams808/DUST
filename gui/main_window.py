@@ -98,11 +98,11 @@ class MainWindow(QMainWindow):
 
         self.fig_a = Figure(figsize=(6, 5))
         self.canvas_a = FigureCanvas(self.fig_a)
-        right_tabs.addTab(self._wrap_canvas(self.canvas_a, self.fig_a), "Fig 4.17-style: K' vs R'")
+        right_tabs.addTab(self._wrap_canvas(self.canvas_a, self.fig_a), "K' vs R'")
 
         self.fig_b = Figure(figsize=(6, 5))
         self.canvas_b = FigureCanvas(self.fig_b)
-        right_tabs.addTab(self._wrap_canvas(self.canvas_b, self.fig_b), "Fig 5.7-style: N4 vs R'")
+        right_tabs.addTab(self._wrap_canvas(self.canvas_b, self.fig_b), "N4 vs R'")
 
         self._load_sample_data()
         self.recompute()
@@ -147,19 +147,25 @@ class MainWindow(QMainWindow):
 
         lu_box = QGroupBox("Lu et al. (2021) model")
         lu_layout = QVBoxLayout(lu_box)
-        lu_layout.addWidget(QLabel(
-            "K'' / R'' use a fixed multicomponent weighting scheme from the "
-            "source spreadsheet (Al2O3 x4, ZrO2 x3, alkalis x1, alkaline "
-            "earths x0.5, La2O3/Y2O3/Bi2O3 x1/3), applied to all 4 fit "
-            "variants - choose which to plot in the Appearance tab. This "
-            "weighting is fixed to the published fit; the formula editor "
-            "above only affects the Dell/Du-Stebbins model's R'/K'."
-        ))
-        lu_layout.addWidget(QLabel(
+        lu_note1 = QLabel(
+            "K'' / R'' use a fixed multicomponent weighting scheme "
+            "(Al2O3 x4, ZrO2 x3, alkalis x1, alkaline earths x0.5, "
+            "La2O3/Y2O3/Bi2O3 x1/3), applied to all 4 fit variants - "
+            "choose which to plot in the Appearance tab. This weighting "
+            "is fixed to the published fit; the formula editor above "
+            "only affects the Dell/Du-Stebbins model's R'/K'. Any oxide "
+            "outside this scheme is simply excluded from R''/K'', not "
+            "an error."
+        )
+        lu_note1.setWordWrap(True)
+        lu_layout.addWidget(lu_note1)
+        lu_note2 = QLabel(
             "Note: this model reports N4 only - no NBO speciation "
             "breakdown is published for it, so %NBO-species columns use "
             "the Dell model only."
-        ))
+        )
+        lu_note2.setWordWrap(True)
+        lu_layout.addWidget(lu_note2)
         layout.addWidget(lu_box)
         layout.addStretch(1)
         scroll.setWidget(container)
@@ -178,7 +184,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(container)
 
         # -- Fig A ----------------------------------------------------
-        box_a = QGroupBox("Fig 4.17-style (K' vs R')")
+        box_a = QGroupBox("K' vs R'")
         form_a = QFormLayout(box_a)
         self.a_title = QLineEdit(self.fig_a_cfg.title)
         self.a_cmap = QComboBox()
@@ -233,7 +239,7 @@ class MainWindow(QMainWindow):
         self.a_point_color.colorChanged.connect(self._appearance_changed)
 
         # -- Fig B ----------------------------------------------------
-        box_b = QGroupBox("Fig 5.7-style (N4 vs R') - data series")
+        box_b = QGroupBox("N4 vs R' - regions and data series")
         form_b = QFormLayout(box_b)
         self.b_title = QLineEdit(self.fig_b_cfg.title)
         self.b_rmin, self.b_rmax = QDoubleSpinBox(), QDoubleSpinBox()
@@ -261,6 +267,14 @@ class MainWindow(QMainWindow):
         form_b.addRow(self.b_show_isok)
         form_b.addRow(self.b_show_region_legend)
         form_b.addRow(self.b_grid_chk)
+
+        region_names = {1: "No NBO", 2: "NBO-Si only (Q3)", 3: "NBO-Si (Q2&Q3) + NBO-B"}
+        self._region_color_buttons = {}
+        for i in (1, 2, 3):
+            btn = ColorButton(self.fig_b_cfg.region_colors.get(i, "white"))
+            btn.colorChanged.connect(self._appearance_changed)
+            self._region_color_buttons[i] = btn
+            form_b.addRow(f"Region color: {region_names[i]}", btn)
 
         self.b_title.editingFinished.connect(self._appearance_changed)
         self.b_isok.editingFinished.connect(self._appearance_changed)
@@ -336,6 +350,8 @@ class MainWindow(QMainWindow):
             pass
         self.fig_b_cfg.show_iso_k = self.b_show_isok.isChecked()
         self.fig_b_cfg.show_region_legend = self.b_show_region_legend.isChecked()
+        for i, btn in self._region_color_buttons.items():
+            self.fig_b_cfg.region_colors[i] = btn.color()
         self.fig_b_cfg.show_grid = self.b_grid_chk.isChecked()
 
         for s in self.fig_b_cfg.series:

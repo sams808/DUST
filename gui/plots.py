@@ -1,12 +1,12 @@
 """
-Matplotlib rendering for the two thesis-style figures:
+Matplotlib rendering for the two figures:
 
-  Fig A ("4.17-style"): K' vs R', background = Dell/Du-Stebbins N4(K',R')
-         heatmap, data points overlaid.
-  Fig B ("5.7-style"):   N4 vs R', background = 3 NBO-regime bands
-         (No NBO / NBO-Si only / NBO-Si+NBO-B), iso-K' guide lines,
-         data points overlaid (any combination of Dell and/or Lu et al.
-         2021 model N4 series, so the user can compare predictions).
+  Fig A: K' vs R', background = Dell/Du-Stebbins N4(K',R') heatmap,
+         data points overlaid.
+  Fig B: N4 vs R', background = 3 NBO-regime bands (No NBO / NBO-Si
+         only / NBO-Si+NBO-B), iso-K' guide lines, data points
+         overlaid (any combination of Dell and/or Lu et al. 2021 model
+         N4 series, so the user can compare predictions).
 
 Both take a plain dataclass config so every visual choice (colors,
 limits, labels, markers, fonts...) is a single field the GUI can bind
@@ -230,11 +230,19 @@ def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig):
                     bbox=dict(boxstyle="round,pad=0.05", facecolor="white",
                               edgecolor="none", alpha=0.6))
 
+    shows_lu_series = False
     if df is not None and len(df):
+        # All series share the Dell/Du-Stebbins R' x-position - the
+        # background regions and iso-K' lines are inherently defined in
+        # terms of that R', so a Lu et al. (2021) point's x-coordinate is
+        # NOT the R'' that actually fed its own N4 (see the xlabel note
+        # below, which flags this honestly rather than implying otherwise).
         x = df.get("Dell_R")
         for s in config.series:
             if not s.visible or s.column not in df.columns:
                 continue
+            if s.column.startswith("Lu_"):
+                shows_lu_series = True
             y = df[s.column]
             ax.scatter(x, y, label=s.label, color=s.color, marker=s.marker,
                        s=s.size, edgecolors=s.edgecolor, alpha=s.alpha, zorder=5)
@@ -254,7 +262,14 @@ def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig):
     if config.show_legend and config.series:
         ax.legend(loc="upper left", fontsize=config.font_size * 0.8)
 
-    ax.set_xlabel(config.xlabel, fontsize=config.font_size)
+    # Points from Lu et al. (2021) series are plotted at Dell's R', not
+    # their own R'' (see comment above) - say so on the axis rather than
+    # silently labeling it "R'" when it's standing in for both, unless
+    # the user has already typed a custom label of their own.
+    xlabel = config.xlabel
+    if xlabel == "R'" and shows_lu_series:
+        xlabel = "R' or R''"
+    ax.set_xlabel(xlabel, fontsize=config.font_size)
     ax.set_ylabel(config.ylabel, fontsize=config.font_size)
     ax.set_title(config.title, fontsize=config.font_size * 1.1)
     ax.tick_params(labelsize=config.font_size * 0.9)

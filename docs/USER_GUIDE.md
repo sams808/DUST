@@ -53,30 +53,38 @@ variant, etc.) - to a CSV.
 ## 3. The "Formulas / Oxides" tab
 
 Controls what R' and K' *mean* for the Dell/Du-Stebbins model - fully
-editable, not fixed to one textbook definition. See
+editable, not fixed to one textbook definition or a fixed list of
+which oxides can play which role. See
 [CUSTOMIZATION.md](CUSTOMIZATION.md#rk-formula-editor) for the full
 reference; short version:
 
-- Two tables, **Formers** and **Modifiers** - each oxide has a
-  checkbox (include/exclude) and a coefficient (weight).
-  `K' = SiO2 / (checked formers, weighted sum)`,
-  `R' = (checked modifiers, weighted sum) / (checked formers, weighted sum)`.
+- One table, every recognized oxide (SiO2 excluded - it's always the
+  K' numerator), each with a **Role** (Ignore / Former / Modifier) and
+  a **Coefficient** (weight). `K' = SiO2 / (Former oxides, weighted
+  sum)`, `R' = (Modifier oxides, weighted sum) / (Former oxides,
+  weighted sum)`. The oxide list covers more than the classic
+  alkali/alkaline-earth borosilicate system - transition metals, rare
+  earths, and actinide oxides are all there for complex glasses (e.g.
+  nuclear waste borosilicates).
 - **Preset** dropdown jumps to a few common starting points (Dell
-  defaults, a bare-bones Na2O+CaO formula, the exact formulas behind
-  thesis Figs 4.17 and 5.7, or the Lu et al. 2021 weighting scheme
-  applied to this model). Editing any checkbox/coefficient after
-  picking a preset switches the dropdown to "(custom)".
-- **Save formula... / Load formula...** write/read the current
-  formers+modifiers as JSON, so your own refined formula persists
-  across sessions - hand a `.json` file to a labmate and they get your
-  exact definition.
+  defaults, a bare-bones Na2O+CaO formula, Na2O+CaO+Bi2O3, Na2O only,
+  or the Lu et al. 2021 weighting scheme applied to this model).
+  Editing any row after picking a preset switches the dropdown to
+  "(custom)".
+- **Save formula... / Load formula...** write/read the current role
+  assignments as JSON, so your own refined formula persists across
+  sessions - hand a `.json` file to a labmate and they get your exact
+  definition.
 - **Reset to Dell defaults** - one click back to alkalis + alkaline
-  earths + Bi2O3 over Al2O3+B2O3.
+  earths over Al2O3+B2O3 (Bi2O3 is not in this default - see
+  docs/MODELS_REFERENCE.md for why).
 
 The Lu et al. (2021) model's own K''/R'' weighting is fixed to the
 published fit (shown for reference at the bottom of this tab) and is
 not affected by this editor - only the Dell/Du-Stebbins model's R'/K'
-are customizable this way.
+are customizable this way. Any oxide outside that fit's own
+coefficient table is simply excluded from its R''/K'' rather than
+raising an error.
 
 ## 4. The "Appearance" tab
 
@@ -84,46 +92,46 @@ Every visual choice for both figures. See
 [CUSTOMIZATION.md](CUSTOMIZATION.md) for the full field-by-field
 reference. Grouped as:
 
-- **Fig 4.17-style (K' vs R')**: title, colormap, R'/K' axis ranges,
-  what column colors the data points (any numeric column, or a single
-  flat color), point size/marker, optional point labels (from
-  `Sample`), colorbar/grid toggles.
-- **Fig 5.7-style (N4 vs R') - data series**: title, R'/N4 axis
-  ranges, which iso-K' guide lines to draw, regime-legend/grid
-  toggles, and a **per-model series table** - a Show checkbox, color,
-  and marker for each of Dell/Du-Stebbins and the 4 Lu et al. (2021)
-  variants. Tick more than one to overlay several models' N4
-  predictions on the same axes for direct comparison.
+- **K' vs R'**: title, colormap, R'/K' axis ranges, what column colors
+  the data points (any numeric column, or a single flat color), point
+  size/marker, optional point labels (from `Sample`, automatically
+  spaced apart when points are close together), colorbar/grid toggles.
+- **N4 vs R' - regions and data series**: title, R'/N4 axis ranges,
+  which iso-K' guide lines to draw, regime-legend/grid toggles, a
+  color picker for each of the 3 regime background colors, and a
+  **per-model series table** - a Show checkbox, color, and marker for
+  each of Dell/Du-Stebbins and the 4 Lu et al. (2021) variants. Tick
+  more than one to overlay several models' N4 predictions on the same
+  axes for direct comparison.
 
 Every change redraws both figures immediately.
 
 ## 5. The figure tabs
 
-**"Fig 4.17-style: K' vs R'"** and **"Fig 5.7-style: N4 vs R'"**, each
-with:
+**"K' vs R'"** and **"N4 vs R'"**, each with:
 
 - The standard matplotlib toolbar (home/pan/zoom/save icon row) - use
   it to pan/zoom interactively or do a quick "save" via the disk icon.
 - **Export DPI** + **Export figure...** - the app's own export, which
   respects your chosen DPI and lets you pick PNG/PDF/SVG. Prefer this
-  over the toolbar's save icon for anything going into a manuscript.
+  over the toolbar's save icon for anything going into a publication.
 
 ## Typical workflows
 
-**"I just want to drop my thesis data in and see where it falls"**
+**"I just want to drop my data in and see where it falls"**
 Data tab -> Import CSV (or type rows by hand) -> look at both figure
-tabs. Defaults already match Fig 4.17/5.7's own R' definition family.
+tabs.
 
 **"I want to compare Dell/Du-Stebbins vs. Lu et al. 2021 for my glasses"**
-Appearance tab -> in the Fig 5.7-style series table, tick "Dell /
-Du-Stebbins" and whichever Lu variant(s) you want -> switch to the Fig
-5.7-style tab.
+Appearance tab -> in the N4-vs-R' series table, tick "Dell /
+Du-Stebbins" and whichever Lu variant(s) you want -> switch to the N4
+vs R' tab.
 
-**"I use a different R' definition than the thesis"**
+**"I use a different R' definition than the defaults"**
 Formulas / Oxides tab -> either pick the closest preset and tweak it,
-or start from "Reset to Dell defaults" and check/uncheck oxides and
-edit their coefficients directly -> Save formula... once it's right,
-so you don't have to redo it next time.
+or start from "Reset to Dell defaults" and set each oxide's role and
+coefficient directly -> Save formula... once it's right, so you don't
+have to redo it next time.
 
 **"I need a publication-ready figure"**
 Set everything up on the Appearance tab (colors, ranges, labels,

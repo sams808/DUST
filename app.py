@@ -1,10 +1,10 @@
 """Entry point: DUST.
 
-Plots the two thesis-style figures (K' vs R' background N4 map, and
-N4 vs R' NBO-regime map) for aluminoborosilicate / multicomponent
-glasses, using the Dell (1983)/Du & Stebbins (2005a) model and the
-Lu et al. (2021) model, with an editable composition table (manual
-entry or CSV import) and full plot customization.
+Plots K' vs R' (background N4 map) and N4 vs R' (NBO-regime map) for
+aluminoborosilicate / multicomponent glasses, using the Dell (1983)/
+Du & Stebbins (2005a) model and the Lu et al. (2021) model, with an
+editable composition table (manual entry or CSV import) and full plot
+customization.
 
 Run with:  py -3.11 app.py   (or double-click DUST.bat)
 """
@@ -23,6 +23,11 @@ ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("DUST")
+    # Fusion draws its own checkbox/combo indicators instead of deferring
+    # to the native Windows style, which is the fix for a real bug: table
+    # cell checkboxes were rendering as solid black squares after being
+    # unchecked and re-checked under the native style + Windows dark mode.
+    app.setStyle("Fusion")
 
     icon_path = os.path.join(ASSETS, "dust_logo.png")
     if os.path.exists(icon_path):

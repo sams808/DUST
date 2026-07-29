@@ -96,7 +96,7 @@ def test_dell_nbo_speciation_sums_to_total_and_percentages_sum_to_100():
 
 
 def test_dell_custom_formers_and_modifiers():
-    # Figure 4.17-style R' = (Na2O+CaO+Bi2O3)/(Al2O3+B2O3)
+    # Custom R' = (Na2O+CaO+Bi2O3)/(Al2O3+B2O3)
     df = pd.DataFrame([{"SiO2": 60, "Al2O3": 5, "B2O3": 15, "Na2O": 10, "CaO": 5, "Bi2O3": 5}])
     modifiers = {"Na2O": 1.0, "CaO": 1.0, "Bi2O3": 1.0}
     out = compute_dell(df, modifiers=modifiers)

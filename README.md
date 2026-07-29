@@ -13,7 +13,7 @@ composition, with a fully editable R'/K' formula, an editable
 composition table, CSV import, two independent N4 models, NBO regime
 classification, %NBO speciation, and full plot customization.
 
-![Fig 4.17-style and Fig 5.7-style plots, generated from the app's own bundled example data](docs/img/preview.png)
+![K' vs R' and N4 vs R' plots, generated from the app's own bundled example data](docs/img/preview.png)
 
 ## Quick start
 
@@ -40,12 +40,11 @@ See [docs/INSTALL.md](docs/INSTALL.md) for details/troubleshooting,
 
 ## What it plots
 
-- **Fig 4.17-style** ("K' vs R'"): K' on the y-axis, R' on the x-axis,
-  background colored by the Dell/Du-Stebbins N4(K',R') surface, your
-  data points overlaid (optionally colored by any numeric column, e.g.
-  Tg or measured N4).
-- **Fig 5.7-style** ("N4 vs R'"): N4 on the y-axis, R' on the x-axis,
-  background split into the 3 published NBO regimes, iso-K' guide
+- **K' vs R'**: K' on the y-axis, R' on the x-axis, background colored
+  by the Dell/Du-Stebbins N4(K',R') surface, your data points overlaid
+  (optionally colored by any numeric column, e.g. Tg or measured N4).
+- **N4 vs R'**: N4 on the y-axis, R' on the x-axis, background split
+  into the 3 published NBO regimes (colors customizable), iso-K' guide
   lines, and your data points - for any combination of the 5 available
   N4 series (Dell/Du-Stebbins + the 4 Lu et al. 2021 variants), so you
   can compare what different models predict for the same glass.
@@ -53,10 +52,12 @@ See [docs/INSTALL.md](docs/INSTALL.md) for details/troubleshooting,
 ## Two independent N4 models
 
 1. **Dell (1983) / Du & Stebbins (2005a)** - R'/K' definition is fully
-   customizable (which oxides count as formers/modifiers, and their
-   weights), because the thesis itself uses different definitions in
-   different figures. Also gives the 3-way NBO regime classification
-   and %NBO-species speciation (Q3-Si / Q2-Si / B).
+   customizable: any oxide can be assigned as a network former (K'/R'
+   denominator), a modifier (R' numerator), or ignored, each with its
+   own weight - from the classic alkali/alkaline-earth borosilicate
+   formula down to a fully custom weighting for complex multicomponent
+   glasses. Also gives the 3-way NBO regime classification and
+   %NBO-species speciation (Q3-Si / Q2-Si / B).
 2. **Lu et al. (2021)** - 4 fit variants (modified DS / modified
    Bernstein, each whole-database or borosilicate-only), generalized
    multicomponent oxide weighting. N4 only, no NBO speciation.
