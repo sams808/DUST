@@ -5,11 +5,12 @@ from pathlib import Path
 
 import pandas as pd
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QSplitter,
     QTableWidget, QTableWidgetItem, QPushButton, QLabel, QFormLayout,
     QComboBox, QDoubleSpinBox, QSpinBox, QCheckBox, QGroupBox, QLineEdit,
-    QScrollArea, QFileDialog, QMessageBox, QGridLayout,
+    QScrollArea, QFileDialog, QMessageBox, QGridLayout, QDialog, QMenu,
 )
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
@@ -22,6 +23,9 @@ from gui.table import DataTable
 from gui.plots import FigAConfig, FigBConfig, SeriesStyle, draw_fig_a, draw_fig_b
 from gui.widgets import ColorButton
 from gui.formula_editor import FormulaEditor
+from gui.point_style import PointStyle, PointStyleDialog
+
+HIT_RADIUS_PX = 12
 
 RESULT_DISPLAY_COLUMNS = [
     ("Sample", "Sample"),
@@ -56,6 +60,10 @@ class MainWindow(QMainWindow):
         self.formers = dict(DELL_DEFAULT_FORMERS)
         self.modifiers = dict(DELL_DEFAULT_MODIFIERS)
         self.computed_df = pd.DataFrame()
+        # Per-point style overrides, keyed by (row uid, plot key) - plot
+        # key is "A" for the K'-vs-R' figure, or an N4 series column name
+        # for the N4-vs-R' figure. Edited by double-clicking a point.
+        self.point_styles: dict[tuple, PointStyle] = {}
 
         self.fig_a_cfg = FigAConfig()
         self.fig_b_cfg = FigBConfig(series=[
@@ -99,10 +107,12 @@ class MainWindow(QMainWindow):
         self.fig_a = Figure(figsize=(6, 5))
         self.canvas_a = FigureCanvas(self.fig_a)
         right_tabs.addTab(self._wrap_canvas(self.canvas_a, self.fig_a), "K' vs R'")
+        self.canvas_a.mpl_connect("button_press_event", self._on_click_fig_a)
 
         self.fig_b = Figure(figsize=(6, 5))
         self.canvas_b = FigureCanvas(self.fig_b)
         right_tabs.addTab(self._wrap_canvas(self.canvas_b, self.fig_b), "N4 vs R'")
+        self.canvas_b.mpl_connect("button_press_event", self._on_click_fig_b)
 
         self._load_sample_data()
         self.recompute()
@@ -164,6 +174,101 @@ class MainWindow(QMainWindow):
             fig.set_size_inches(original_size)
             fig.canvas.draw_idle()
         QMessageBox.information(self, "Export complete", f"Saved to {path}")
+
+    # -- per-point style editing (double-click a point) --------------------
+    def _on_click_fig_a(self, event):
+        if not event.dblclick or event.button != 1 or event.inaxes is None:
+            return
+        df = self.computed_df
+        if df is None or len(df) == 0 or "Dell_R" not in df.columns or "_uid" not in df.columns:
+            return
+        ax = event.inaxes
+        candidates = []
+        for i in range(len(df)):
+            x, y = df["Dell_R"].iloc[i], df["Dell_K"].iloc[i]
+            if pd.isna(x) or pd.isna(y):
+                continue
+            px, py = ax.transData.transform((x, y))
+            dist = ((px - event.x) ** 2 + (py - event.y) ** 2) ** 0.5
+            if dist <= HIT_RADIUS_PX:
+                sample = str(df["Sample"].iloc[i]) if "Sample" in df.columns else f"row {i}"
+                candidates.append((dist, df["_uid"].iloc[i], sample, "A", "K' vs R'"))
+        candidates.sort(key=lambda c: c[0])
+        self._resolve_point_click(candidates)
+
+    def _on_click_fig_b(self, event):
+        if not event.dblclick or event.button != 1 or event.inaxes is None:
+            return
+        df = self.computed_df
+        if df is None or len(df) == 0 or "Dell_R" not in df.columns or "_uid" not in df.columns:
+            return
+        ax = event.inaxes
+        candidates = []
+        for i in range(len(df)):
+            x = df["Dell_R"].iloc[i]
+            if pd.isna(x):
+                continue
+            sample = str(df["Sample"].iloc[i]) if "Sample" in df.columns else f"row {i}"
+            for s in self.fig_b_cfg.series:
+                if not s.visible or s.column not in df.columns:
+                    continue
+                y = df[s.column].iloc[i]
+                if pd.isna(y):
+                    continue
+                px, py = ax.transData.transform((x, y))
+                dist = ((px - event.x) ** 2 + (py - event.y) ** 2) ** 0.5
+                if dist <= HIT_RADIUS_PX:
+                    candidates.append((dist, df["_uid"].iloc[i], sample, s.column, s.label))
+        candidates.sort(key=lambda c: c[0])
+        self._resolve_point_click(candidates)
+
+    def _resolve_point_click(self, candidates):
+        if not candidates:
+            return
+        if len(candidates) == 1:
+            _, uid, sample, plot_key, series_label = candidates[0]
+            self._open_point_editor(uid, plot_key, sample, series_label)
+            return
+        # Multiple points at/near this pixel (overlapping or nearly so) -
+        # let the user pick which one before opening the editor, rather
+        # than silently guessing and editing the wrong one.
+        menu = QMenu(self)
+        actions = {}
+        seen = set()
+        for _, uid, sample, plot_key, series_label in candidates:
+            key = (uid, plot_key)
+            if key in seen:
+                continue
+            seen.add(key)
+            text = sample if plot_key == "A" else f"{sample}  ({series_label})"
+            act = menu.addAction(text)
+            actions[act] = (uid, plot_key, sample, series_label)
+        chosen = menu.exec(QCursor.pos())
+        if chosen is not None and chosen in actions:
+            uid, plot_key, sample, series_label = actions[chosen]
+            self._open_point_editor(uid, plot_key, sample, series_label)
+
+    def _open_point_editor(self, uid, plot_key, sample, series_label):
+        key = (uid, plot_key)
+        existing = self.point_styles.get(key)
+        if existing is not None:
+            seed = existing
+        elif plot_key == "A":
+            seed = PointStyle(color=self.fig_a_cfg.point_color, marker=self.fig_a_cfg.point_marker)
+        else:
+            s = next((s for s in self.fig_b_cfg.series if s.column == plot_key), None)
+            seed = PointStyle(color=s.color if s else "#000000", marker=s.marker if s else "o")
+
+        default_label = sample if plot_key == "A" else ""
+        title = sample if plot_key == "A" else f"{sample} - {series_label}"
+        dlg = PointStyleDialog(title, default_label, seed, self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        if dlg.was_reset():
+            self.point_styles.pop(key, None)
+        else:
+            self.point_styles[key] = dlg.result_style()
+        self._redraw()
 
     # ------------------------------------------------------------------
     def _wrap_formulas_tab(self):
@@ -436,9 +541,9 @@ class MainWindow(QMainWindow):
         self.results_table.resizeColumnsToContents()
 
     def _redraw(self):
-        draw_fig_a(self.fig_a, self.computed_df, self.fig_a_cfg)
+        draw_fig_a(self.fig_a, self.computed_df, self.fig_a_cfg, self.point_styles)
         self.canvas_a.draw_idle()
-        draw_fig_b(self.fig_b, self.computed_df, self.fig_b_cfg)
+        draw_fig_b(self.fig_b, self.computed_df, self.fig_b_cfg, self.point_styles)
         self.canvas_b.draw_idle()
 
     def export_results_csv(self):
@@ -448,7 +553,9 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, "Export results CSV", "n4_nbo_results.csv", "CSV files (*.csv)")
         if not path:
             return
-        self.computed_df.to_csv(path, index=False)
+        # "_uid" is an internal identity column for per-point plot styling,
+        # not scientific output.
+        self.computed_df.drop(columns=["_uid"], errors="ignore").to_csv(path, index=False)
         QMessageBox.information(self, "Export complete", f"Saved to {path}")
 
     # ------------------------------------------------------------------

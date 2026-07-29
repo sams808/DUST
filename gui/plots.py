@@ -86,7 +86,7 @@ class FigBConfig:
     font_size: float = 11.0
 
 
-def draw_fig_a(fig, df: pd.DataFrame, config: FigAConfig):
+def draw_fig_a(fig, df: pd.DataFrame, config: FigAConfig, point_styles: dict | None = None):
     # fig.clear() (not ax.clear()) so colorbar axes from the previous draw
     # are actually removed instead of accumulating on every redraw.
     fig.clear()
@@ -105,24 +105,49 @@ def draw_fig_a(fig, df: pd.DataFrame, config: FigAConfig):
         cb = fig.colorbar(mesh, ax=ax)
         cb.set_label(config.colorbar_label, fontsize=config.font_size)
 
+    point_styles = point_styles or {}
     if df is not None and len(df) and "Dell_R" in df.columns and "Dell_K" in df.columns:
         x = df["Dell_R"].to_numpy()
         y = df["Dell_K"].to_numpy()
+        has_uid = "_uid" in df.columns
+        # Split rows into "default" (normal batch-styled, auto-arranged
+        # label) vs. "custom" (double-clicked and given their own
+        # PointStyle) - see gui/point_style.py.
+        custom_idx = {}
+        if has_uid:
+            uids = df["_uid"].to_numpy()
+            for i, uid in enumerate(uids):
+                style = point_styles.get((uid, "A"))
+                if style is not None:
+                    custom_idx[i] = style
+        default_idx = [i for i in range(len(df)) if i not in custom_idx]
+
         c = None
-        if config.point_color_by and config.point_color_by in df.columns:
-            c = df[config.point_color_by].to_numpy()
-        sc = ax.scatter(
-            x, y, c=c if c is not None else config.point_color,
-            cmap=config.colormap if c is not None else None,
-            s=config.point_size, marker=config.point_marker,
-            edgecolors=config.point_edgecolor, linewidths=1.2,
-        )
-        if c is not None:
-            cb2 = fig.colorbar(sc, ax=ax, pad=0.12)
-            cb2.set_label(config.point_color_by, fontsize=config.font_size)
+        if default_idx:
+            xi, yi = x[default_idx], y[default_idx]
+            if config.point_color_by and config.point_color_by in df.columns:
+                c = df[config.point_color_by].to_numpy()[default_idx]
+            sc = ax.scatter(
+                xi, yi, c=c if c is not None else config.point_color,
+                cmap=config.colormap if c is not None else None,
+                s=config.point_size, marker=config.point_marker,
+                edgecolors=config.point_edgecolor, linewidths=1.2,
+            )
+            if c is not None:
+                cb2 = fig.colorbar(sc, ax=ax, pad=0.12)
+                cb2.set_label(config.point_color_by, fontsize=config.font_size)
+
+        for i, style in custom_idx.items():
+            if pd.isna(x[i]) or pd.isna(y[i]):
+                continue
+            ax.scatter([x[i]], [y[i]], c=style.color, marker=style.marker,
+                       s=config.point_size, edgecolors=config.point_edgecolor,
+                       linewidths=1.2, zorder=6)
+
         if config.label_column and config.label_column in df.columns:
             texts, label_x, label_y = [], [], []
-            for xi, yi, lbl in zip(x, y, df[config.label_column]):
+            for i in default_idx:
+                xi, yi, lbl = x[i], y[i], df[config.label_column].iloc[i]
                 if pd.notna(xi) and pd.notna(yi) and pd.notna(lbl) and str(lbl).strip():
                     texts.append(ax.text(xi, yi, str(lbl), fontsize=config.font_size * 0.8))
                     label_x.append(xi)
@@ -138,6 +163,27 @@ def draw_fig_a(fig, df: pd.DataFrame, config: FigAConfig):
                 adjust_text(texts, x=label_x, y=label_y, ax=ax,
                             arrowprops=dict(arrowstyle="-", color="gray", lw=0.6, alpha=0.7))
 
+        # Custom points manage their own label independently of adjustText -
+        # the whole point of double-clicking one is manual control.
+        for i, style in custom_idx.items():
+            xi, yi = x[i], y[i]
+            if pd.isna(xi) or pd.isna(yi):
+                continue
+            default_lbl = (
+                df[config.label_column].iloc[i]
+                if config.label_column and config.label_column in df.columns else None
+            )
+            lbl = default_lbl if style.label is None else style.label
+            if lbl is None or not str(lbl).strip():
+                continue
+            ax.annotate(
+                str(lbl), (xi, yi), textcoords="offset points",
+                xytext=(style.label_dx, style.label_dy),
+                fontsize=config.font_size * 0.8,
+                arrowprops=(dict(arrowstyle="-", color="gray", lw=0.6, alpha=0.7)
+                            if style.show_leader else None),
+            )
+
     ax.set_xlabel(config.xlabel, fontsize=config.font_size)
     ax.set_ylabel(config.ylabel, fontsize=config.font_size)
     ax.set_title(config.title, fontsize=config.font_size * 1.1)
@@ -148,7 +194,7 @@ def draw_fig_a(fig, df: pd.DataFrame, config: FigAConfig):
     return ax
 
 
-def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig):
+def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig, point_styles: dict | None = None):
     fig.clear()
     ax = fig.add_subplot(111)
     # Set limits now (not at the end) so ax.transData is correct below when
@@ -231,21 +277,52 @@ def draw_fig_b(fig, df: pd.DataFrame, config: FigBConfig):
                               edgecolor="none", alpha=0.6))
 
     shows_lu_series = False
-    if df is not None and len(df):
+    point_styles = point_styles or {}
+    if df is not None and len(df) and "Dell_R" in df.columns:
         # All series share the Dell/Du-Stebbins R' x-position - the
         # background regions and iso-K' lines are inherently defined in
         # terms of that R', so a Lu et al. (2021) point's x-coordinate is
         # NOT the R'' that actually fed its own N4 (see the xlabel note
         # below, which flags this honestly rather than implying otherwise).
-        x = df.get("Dell_R")
+        x = df["Dell_R"].to_numpy()
+        uids = df["_uid"].to_numpy() if "_uid" in df.columns else None
         for s in config.series:
             if not s.visible or s.column not in df.columns:
                 continue
             if s.column.startswith("Lu_"):
                 shows_lu_series = True
-            y = df[s.column]
-            ax.scatter(x, y, label=s.label, color=s.color, marker=s.marker,
-                       s=s.size, edgecolors=s.edgecolor, alpha=s.alpha, zorder=5)
+            y = df[s.column].to_numpy()
+
+            custom_idx = {}
+            if uids is not None:
+                for i, uid in enumerate(uids):
+                    style = point_styles.get((uid, s.column))
+                    if style is not None:
+                        custom_idx[i] = style
+            default_idx = [i for i in range(len(df)) if i not in custom_idx]
+
+            if default_idx:
+                ax.scatter(x[default_idx], y[default_idx], label=s.label, color=s.color,
+                           marker=s.marker, s=s.size, edgecolors=s.edgecolor,
+                           alpha=s.alpha, zorder=5)
+            for i, style in custom_idx.items():
+                if pd.isna(x[i]) or pd.isna(y[i]):
+                    continue
+                ax.scatter([x[i]], [y[i]], color=style.color, marker=style.marker,
+                           s=s.size, edgecolors=s.edgecolor, alpha=s.alpha, zorder=6)
+                # Fig B has no default label at all (unlike Fig A's Sample
+                # column) - a custom point only shows one if given its own text.
+                lbl = style.label
+                if lbl is None or not str(lbl).strip():
+                    continue
+                ax.annotate(
+                    str(lbl), (x[i], y[i]), textcoords="offset points",
+                    xytext=(style.label_dx, style.label_dy),
+                    fontsize=config.font_size * 0.8,
+                    arrowprops=(dict(arrowstyle="-", color="gray", lw=0.6, alpha=0.7)
+                                if style.show_leader else None),
+                    zorder=7,
+                )
 
     if config.show_region_legend:
         from matplotlib.patches import Patch

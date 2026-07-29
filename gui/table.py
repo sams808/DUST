@@ -3,9 +3,14 @@
 Backed by a pandas DataFrame; the QTableWidget is just a thin editable
 view over it. Oxide columns are mol%; two free-text columns ("Sample",
 "Label") are carried through for point annotation / grouping in the
-plots.
+plots. Every row also carries a hidden "_uid" column (not a visible
+table column - tracked in lockstep with the table's rows) so per-point
+plot styling (gui/point_style.py) can stay attached to the same row
+even if other rows are added, deleted, or reordered around it.
 """
 from __future__ import annotations
+
+import uuid
 
 import pandas as pd
 from PySide6.QtCore import Qt, Signal
@@ -82,6 +87,7 @@ class DataTable(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.oxide_columns = list(DEFAULT_OXIDE_COLUMNS)
+        self._row_uids: list[str] = []
 
         layout = QVBoxLayout(self)
         btn_row = QHBoxLayout()
@@ -147,6 +153,7 @@ class DataTable(QWidget):
     def add_row(self, values: dict | None = None):
         row = self.table.rowCount()
         self.table.insertRow(row)
+        self._row_uids.insert(row, uuid.uuid4().hex[:8])
         headers = EXTRA_COLUMNS + self.oxide_columns
         values = values or {}
         self.table.blockSignals(True)
@@ -162,11 +169,14 @@ class DataTable(QWidget):
         rows = sorted({idx.row() for idx in self.table.selectedIndexes()}, reverse=True)
         for r in rows:
             self.table.removeRow(r)
+            if 0 <= r < len(self._row_uids):
+                del self._row_uids[r]
         self.dataChanged.emit()
 
     # -- dataframe conversion ---------------------------------------------
     def get_dataframe(self) -> pd.DataFrame:
         headers = EXTRA_COLUMNS + self.oxide_columns
+        self._sync_uids()
         rows = []
         for r in range(self.table.rowCount()):
             row = {}
@@ -180,8 +190,18 @@ class DataTable(QWidget):
                         row[h] = 0.0
                 else:
                     row[h] = text
+            row["_uid"] = self._row_uids[r]
             rows.append(row)
-        return pd.DataFrame(rows, columns=headers)
+        return pd.DataFrame(rows, columns=headers + ["_uid"])
+
+    def _sync_uids(self):
+        """Keep _row_uids the same length as the table, generating fresh
+        ids for any row that doesn't have one yet (defensive - every path
+        that adds/removes rows should already keep this in sync)."""
+        n = self.table.rowCount()
+        while len(self._row_uids) < n:
+            self._row_uids.append(uuid.uuid4().hex[:8])
+        del self._row_uids[n:]
 
     def set_dataframe(self, df: pd.DataFrame):
         # grow oxide_columns to include anything present in df
@@ -190,6 +210,15 @@ class DataTable(QWidget):
                 self.oxide_columns.append(col)
         self._rebuild_headers()
         headers = EXTRA_COLUMNS + self.oxide_columns
+
+        if "_uid" in df.columns:
+            self._row_uids = [
+                uid if isinstance(uid, str) and uid else uuid.uuid4().hex[:8]
+                for uid in df["_uid"]
+            ]
+        else:
+            self._row_uids = [uuid.uuid4().hex[:8] for _ in range(len(df))]
+
         self.table.blockSignals(True)
         self.table.setRowCount(len(df))
         for r in range(len(df)):
@@ -232,7 +261,11 @@ class DataTable(QWidget):
                     self.oxide_columns.append(col)
                 headers = EXTRA_COLUMNS + self.oxide_columns
         combined = pd.concat([existing, df], ignore_index=True, sort=False)
-        combined = combined.reindex(columns=headers, fill_value="")
+        # keep "_uid" through the reindex (it's not a visible header column)
+        # so pre-existing rows retain their identity - only the freshly
+        # imported rows (which never had one) get a "" that set_dataframe
+        # below will turn into a fresh id.
+        combined = combined.reindex(columns=headers + ["_uid"], fill_value="")
         self.set_dataframe(combined)
         QMessageBox.information(self, "Import complete", f"Imported {len(df)} row(s).")
 
@@ -240,5 +273,7 @@ class DataTable(QWidget):
         path, _ = QFileDialog.getSaveFileName(self, "Export CSV", "n4_nbo_data.csv", "CSV files (*.csv)")
         if not path:
             return
-        self.get_dataframe().to_csv(path, index=False)
+        # "_uid" is an internal identity column for per-point plot styling,
+        # not something a user importing this file elsewhere should see.
+        self.get_dataframe().drop(columns=["_uid"]).to_csv(path, index=False)
         QMessageBox.information(self, "Export complete", f"Saved to {path}")

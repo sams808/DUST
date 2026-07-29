@@ -127,7 +127,25 @@ reasoning.
 
 ## Exporting figures
 
-Each figure tab has its own **Export DPI** spinner (72-1200) and
-**Export figure...** button, saving PNG/PDF/SVG at your chosen
-resolution via a file dialog - independent of the matplotlib
-toolbar's own quick-save icon, which always uses a fixed default.
+Each figure tab has its own **Export size** (width x height, in cm -
+defaults to the on-screen figure's own proportions) and **DPI**
+(72-1200) fields, plus an **Export figure...** button, saving PNG/PDF/SVG
+via a file dialog at exactly the physical size you asked for -
+independent of the matplotlib toolbar's own quick-save icon, which
+always uses a fixed size/default. The figure is only resized for the
+duration of the save and is restored to its on-screen size immediately
+after, so exporting doesn't change what you see in the app.
+
+## Per-point customization
+
+*(Either figure tab)* Double-click any point to open a small editor for
+just that point: color, marker shape, label text (blank = the figure's
+normal default label; a "Hide label" checkbox for suppressing it
+entirely), label offset in points, and whether a thin leader line
+connects an offset label back to its point. "Reset to default" removes
+the override. If multiple points are at or near the click (exactly
+overlapping, or just close together at the current zoom), a menu lists
+each candidate by name/series first. Overrides are tied to the
+underlying row, not its position in the table, so they survive
+add/delete/reorder of other rows. See docs/USER_GUIDE.md for the
+walkthrough.

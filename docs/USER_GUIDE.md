@@ -112,9 +112,23 @@ Every change redraws both figures immediately.
 
 - The standard matplotlib toolbar (home/pan/zoom/save icon row) - use
   it to pan/zoom interactively or do a quick "save" via the disk icon.
-- **Export DPI** + **Export figure...** - the app's own export, which
-  respects your chosen DPI and lets you pick PNG/PDF/SVG. Prefer this
-  over the toolbar's save icon for anything going into a publication.
+- **Export size (cm) + DPI + Export figure...** - the app's own export,
+  which saves at the exact physical size you type in (not a "tight"
+  auto-crop, which would silently change the final size) at your
+  chosen DPI, as PNG/PDF/SVG. Prefer this over the toolbar's save icon
+  for anything going into a publication with a specific figure-width
+  requirement (e.g. a journal's single/double-column width).
+- **Double-click any point** to customize it individually - color,
+  marker shape, label text, label offset, and whether a leader line
+  connects the label back to the point. If several points sit at or
+  near the same spot (overlapping, or just close together at the
+  current zoom level), a small menu lists each one by name so you pick
+  the right one instead of guessing. "Reset to default" in that dialog
+  removes the override. Overrides stay attached to the same row even
+  if you add, delete, or reorder other rows afterward - they follow
+  the row, not its position in the table. In the N4-vs-R' figure, a
+  row can have one point per visible model series, so double-clicking
+  identifies both the row *and* which series' point you clicked.
 
 ## Typical workflows
 
